@@ -1,0 +1,43 @@
+{
+	"categories" : [
+		{
+			"name" : "snowboarding"
+		},
+		{
+			"name" : "skateboarding"
+		},
+		{
+			"name" : "Golf"
+		},
+		{
+			"name" : "Cricket"
+		}
+	],
+	"items" : [
+		{
+			"name" : "snowboard",
+			"category_id" : 0,
+			"description" : "Lorem ipsum dolor sit amet, consectetur adipiscing elit. "
+		},
+		{
+			"name" : "skateboard",
+			"category_id" : 1,
+			"description" : "Lorem ipsum dolor sit amet, consectetur adipiscing elit. "
+		},
+		{
+			"name" : "Golf Club",
+			"category_id" : 2,
+			"description" : "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+		},
+		{
+			"name" : "Golf Ball",
+			"category_id" : 2,
+			"description" : "Lorem ipsum dolor sit amet, consectetur adipiscing elit. "
+		},
+		{
+			"name" : "Cricket Bat",
+			"category_id" : 3,
+			"description" : "Lorem ipsum dolor sit amet, consectetur adipiscing elit.  "
+		}
+	]
+}
