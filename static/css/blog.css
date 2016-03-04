@@ -169,3 +169,36 @@ h6, .h6 {
 .blog-footer p:last-child {
   margin-bottom: 0;
 }
+
+#messages {
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  right: 0;
+  margin-top: 40px;
+}
+
+.blog-header-text {
+  float: right;
+  margin-top: 7px;
+  color: white;
+}
+
+.item-jumbo {
+  padding: 15px;
+  background: #eee;
+  border-radius: 5px;
+}
+
+.item-jumbo .row:first-child {
+  margin-bottom: 15px;
+  border-bottom: 1px white solid;
+}
+
+.item-jumbo img {
+  max-width: 100%;
+}
+
+#signinButton {
+  float: left
+}

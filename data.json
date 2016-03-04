@@ -1,43 +1,67 @@
 {
 	"categories" : [
 		{
-			"name" : "snowboarding"
+			"name" : "snowboarding",
+			"user_id" : 1
 		},
 		{
-			"name" : "skateboarding"
+			"name" : "skateboarding",
+			"user_id" : 1
 		},
 		{
-			"name" : "Golf"
+			"name" : "Golf",
+			"user_id" : 1
 		},
 		{
-			"name" : "Cricket"
+			"name" : "Cricket",
+			"user_id" : 1
 		}
 	],
 	"items" : [
 		{
 			"name" : "snowboard",
 			"category_id" : 0,
-			"description" : "Lorem ipsum dolor sit amet, consectetur adipiscing elit. "
+			"description" : "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ",
+			"user_id" : 1,
+			"picture" : "http://heritagegolfgroup.com/portals/52/golf.jpg",
+			"updated" : "12/01/2015",
+			"created" : "12/01/2015"
 		},
 		{
 			"name" : "skateboard",
 			"category_id" : 1,
-			"description" : "Lorem ipsum dolor sit amet, consectetur adipiscing elit. "
+			"description" : "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ",
+			"user_id" : 1,
+			"picture" : "http://heritagegolfgroup.com/portals/52/golf.jpg",
+			"updated" : "12/01/2015",
+			"created" : "12/01/2015"
 		},
 		{
 			"name" : "Golf Club",
 			"category_id" : 2,
-			"description" : "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+			"description" : "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+			"user_id" : 1,
+			"picture" : "http://heritagegolfgroup.com/portals/52/golf.jpg",
+			"updated" : "12/01/2015",
+			"created" : "12/01/2015"
 		},
 		{
 			"name" : "Golf Ball",
 			"category_id" : 2,
-			"description" : "Lorem ipsum dolor sit amet, consectetur adipiscing elit. "
+			"description" : "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ",
+			"user_id" : 1,
+			"picture" : "http://heritagegolfgroup.com/portals/52/golf.jpg",
+			"updated" : "12/01/2015",
+			"created" : "12/01/2015"
 		},
 		{
 			"name" : "Cricket Bat",
 			"category_id" : 3,
-			"description" : "Lorem ipsum dolor sit amet, consectetur adipiscing elit.  "
+			"description" : "Lorem ipsum dolor sit amet, consectetur adipiscing elit.  ",
+			"user_id" : 1,
+			"picture" : "http://heritagegolfgroup.com/portals/52/golf.jpg",
+			"updated" : "12/01/2015",
+			"created" : "12/01/2015"
 		}
 	]
 }

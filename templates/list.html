@@ -1,8 +1,10 @@
 {% extends "base.html" %}
 {% block body %}
 	<h3>Latest Items</h3>
-	{% for item in items %}  
-
-	{% endfor %}
+	<ul>
+		{% for item in items %}  
+			<li><a href="{{url_for('view_item', item=item['id'])}}">{{ item['name'] }}</a> <span>({{ item['category'] }})</span></li>
+		{% endfor %}
+	</ul>
 {% endblock %}
 

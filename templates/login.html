@@ -1,35 +1,101 @@
 
 {% extends "base.html" %}
 {% block body %}
-	<div class="g-signin2" data-onsuccess="onSignIn"></div>
+
+  <div class="jumbotron">
+    <div id="signinButton">
+    <span class="g-signin"
+    data-scope = "openid email"
+    data-clientid="712697227714-82l7i402jl1uqhr2gqr37iok2ib25io4.apps.googleusercontent.com"
+    data-redirecturi="postmessage"
+    data-accesstype="offline"
+    data-cookiepolicy="single_host_origin"
+    data-callback="onSignIn"
+    data-approvalprompt="force">
+    </span>
+    </div>
+    or
+    <fb:login-button scope="public_profile,email" onlogin="facebook_send_token();"></fb:login-button>
+  
+  </div>
+
+  <div id="result"></div>
 {% endblock %}
 
 {% block javascript %}
  <script>
-      function onSignIn(googleUser) {
-        var profile = googleUser.getBasicProfile();
-        if(profile) {
-          $('.g-signin2').css('display', 'none');
-
-          $.ajax({
-            type: 'POST',
-            url: '/json/gconnect?state={{state}}',
-            contentType: "application/json",
-            data: JSON.stringify(googleUser.getAuthResponse().id_token),
-            success: function(result) {
-              if(result) {
-                $('#result').html('<p>Login Successful, redirecting...</p>');
-                setTimeout(function() {
-                  window.location.href = "/";
-                }, 1000);
-              }
-              else {
-                $('#result').html('<p>There was an error making server side calls</p>');
-              }
-            }
-          })
+  function facebook_send_token() {
+    var access_token = FB.getAuthResponse()['accessToken'];
+    console.log(access_token)
+    console.log('Welcome!  Fetching your information.... ');
+    FB.api('/me', function(response) {
+      console.log('Successful login for: ' + response.name);
+      $.ajax({
+        type: 'POST',
+        url: '/json/fbconnect?state={{state}}',
+        processData: false,
+        data: access_token,
+        contentType: 'application/octet-stream; charset=utf-8',
+        success: function(result) {
+          // Handle or verify the server response if necessary.
+          if (result) {
+            $('#result').html('Login Successful!</br>'+ result + '</br>Redirecting...')
+            setTimeout(function() {
+            window.location = "{{url_for('latest_items')}}";
+          }, 4000);
+            
+          } else {
+            $('#result').html('Failed to make a server-side call. Check your configuration and console.');
+          }
         }
-      }
+      });
+    });
+  };
+
+
+  window.fbAsyncInit = function() {
+    FB.init({
+      appId      : '1002583189820705',
+      xfbml      : true,
+      version    : 'v2.5'
+    });
+  };
+
+  (function(d, s, id){
+     var js, fjs = d.getElementsByTagName(s)[0];
+     if (d.getElementById(id)) {return;}
+     js = d.createElement(s); js.id = id;
+     js.src = "//connect.facebook.net/en_US/sdk.js";
+     fjs.parentNode.insertBefore(js, fjs);
+   }(document, 'script', 'facebook-jssdk'));
+
+  function onSignIn(authResult) {
+
+    if(authResult['code']) {
+        //$('#signinButton').css('display', 'none');
+        console.log(authResult['code']);
+        $.ajax({
+          type: 'POST',
+          url: '/json/gconnect?state={{state}}',
+          contentType: "application/octet-stream; charset=utf-8",
+          processData: false,
+          data: JSON.stringify(authResult['code']),
+          success: function(result) {
+            if(result) {
+              $('#result').html('<p>Login Successful, redirecting...</p>');
+              window.location = "{{url_for('latest_items')}}";
+              setTimeout(function() {
+                window.location.href = "/";
+              }, 1000);
+            }
+            else {
+              $('#result').html('There was an error making server side calls: ' + result['error']);
+            }
+          }
+        });
+    }
+   
+  }
 
 
     </script>
