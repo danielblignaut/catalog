@@ -5,12 +5,23 @@ from json import JSONEncoder
 
 Base = declarative_base()
 
+
+
 class User(Base) :
 	__tablename__ 	= 'users'
 	id 				= Column(Integer, primary_key=True)
 	name 			= Column(String)
 	picture 		= Column(String)
 	email	 		= Column(String)
+
+class AccessToken(Base) :
+	__tablename__	= 'access_tokens'
+	id 				= Column(Integer, primary_key=True)
+	token 			= Column(String)
+	created 		= Column(Date)
+	expires 		= Column(Date)
+	user_id 		= Column(Integer, ForeignKey('users.id'))
+	user 			= relationship(User)
 
 class Category(Base):
 	__tablename__ 		= 'categories'
@@ -20,14 +31,6 @@ class Category(Base):
 	items 				= relationship("Item")
 	user_id		 		= Column(Integer, ForeignKey('users.id'))
 	user 				= relationship(User)
-
-	@property
-	def serialize(self):
-		return {
-			'id': self.id, 
-			'name': self.name,
-			'user_id'	  : self.user_id
-		}
 
 	def __repr__(self):
 		return "<Category(name='%s')>" % (self.name)

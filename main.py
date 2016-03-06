@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, render_template, request, make_response, flash
+from flask import Flask, jsonify, render_template, request, make_response, flash, abort
 from flask import redirect, url_for, send_from_directory
 from flask import session as login_session
 from sqlalchemy.orm import sessionmaker, joinedload
@@ -6,6 +6,7 @@ import json, models,  random, string, os
 from sqlalchemy import create_engine
 import contextlib
 import xml.etree.ElementTree as ET
+import functools
 
 # IMPORTS FOR THIS STEP
 from oauth2client.client import flow_from_clientsecrets, FlowExchangeError
@@ -14,6 +15,7 @@ import requests, time
 import urllib
 from werkzeug import secure_filename
 from werkzeug.contrib.atom import AtomFeed
+import seeder, datetime
 
 
 engine = create_engine('postgresql:///catalog')
@@ -21,13 +23,29 @@ Session = sessionmaker(bind=engine)
 Session.configure(bind=engine)
 session = Session()
 JSON_URL = 'http://localhost:5000'
-UPLOAD_FOLDER = '/vagrant/catalog/uploads'
+UPLOAD_FOLDER = './uploads'
 ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg', 'gif'])
-
-
+MAX_FILE_SIZE = 8 * 1024 * 1024
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
+
+'''Create a response to 400, 401, 403 requests '''
+@app.errorhandler(401)
+def unauthorised(error) :
+	flash('You must be logged in to view this item.')
+	return redirect('/')
+
+@app.errorhandler(400)
+def unauthorised(error) :
+	flash('There was an error loading that page')
+	return redirect('/')
+
+@app.errorhandler(403)
+def unauthorised(error) :
+	flash('Your are not the owner of that item')
+	return redirect('/')
 
 '''the below creates an atom feed of all of the items on the catalog'''
 @app.route('/list.atom')
@@ -64,11 +82,90 @@ def get_nonce() :
 
 	return nonce
 
-'''check if the user is logged in, redirect them if not'''
-def check_login() :
-	if 'username' not in login_session :
-		flash('You need to be logged in to view that page')
-		return redirect('/login')
+'''get the access token by ID'''
+def get_access_token(user_id) :
+	try :
+		expires = datetime.date.today() + datetime.timedelta(days=1)
+		token = session.query(models.AccessToken).filter(models.AccessToken.expires > expires)
+		token = token.filter(models.AccessToken.user_id == user_id).one().get()
+		return token
+	except : 
+		return None
+
+'''get an access token by its code'''
+def get_access_token_by_token(code) :
+	try :
+		expires = datetime.date.today() + datetime.timedelta(days=1)
+		token = session.query(models.AccessToken).filter(models.AccessToken.expires > expires).filter(models.AccessToken.token == code).one()
+		return token
+	except : 
+		return None
+
+'''insert an access token into the database for a given user'''
+def create_access_token(user_id) :
+	nonce = ''.join(random.choice(string.ascii_uppercase + string.digits)
+                    for x in xrange(32))
+	expires = datetime.date.today() + datetime.timedelta(days=1)
+	token = models.AccessToken(user_id = user_id, token=nonce, created = time.strftime("%d/%m/%Y"), expires= expires.strftime("%d/%m/%Y"))
+	session.add(token)
+	session.commit()
+
+	return token
+
+def json_response(code, message) :
+	response = make_response(json.dumps(message), code)
+	response.headers['Content-Type'] = 'application/json'
+	return response
+
+'''check if the user is logged in, redirect them if not.
+This should really be check against an authorisation token stored on the client.'''
+def check_login(func) :
+	@functools.wraps(func)
+	def func_wrapper(*args, **kwargs):
+		if 'access_token' not in login_session :
+			abort(401)
+
+		return func(*args, **kwargs)
+	return func_wrapper
+	
+
+''' chec if the user has the correct nonce '''
+def check_state(func) :
+	@functools.wraps(func)
+	def func_wrapper(*args, **kwargs):
+
+		if 'state' not in login_session :
+			abort(400)
+
+		if login_session['state'] != request.args.get('state') and ('state' not in request.form or login_session['state'] != request.form['state'] ) :
+			abort(400)
+
+		return func(*args, **kwargs)
+	return func_wrapper
+
+'''This function is used on all JSON endpoints that require 
+an authorised request to come from a logged in user'''
+def check_access_token(func) :
+	@functools.wraps(func)
+	def func_wrapper(*args, **kwargs):
+		try :
+			if 'access-token' not in request.headers :
+				return json_response(401, "Your are not not logged in")
+			
+			expires = datetime.date.today() + datetime.timedelta(days=1)
+			token_count = session.query(models.AccessToken).filter(models.AccessToken.expires > expires)
+			token_count = token_count.filter(models.AccessToken.token == request.headers['access-token']).count()
+			
+			if token_count > 0 :
+				return func(*args, **kwargs)
+			else :
+				return json_response(401, "Your are not not logged in")
+
+
+		except :
+			return json_response(401, "Your are not not logged in")
+
+	return func_wrapper
 
 '''Generate the user row in our database when they login for the first time with google / facebook '''
 def createUser(login_session) :
@@ -145,9 +242,8 @@ def view_item(item) :
 
 '''show the form to edit an item'''
 @app.route('/item/<int:item>/edit', methods=['GET'])
+@check_login
 def edit_item(item) :
-	check_login()
-
 
 	item_data = requests.get(JSON_URL + '/json/item/' + str(item))
 	item_data = json.loads(item_data.text)
@@ -162,13 +258,14 @@ def edit_item(item) :
 	return render_template('item/edit.html', id = db_id, item = item_data, 
 		categories = category_data['categories'], state = state)
 
+
 '''show the same template as above, mock up an empty item to 
 prevent errors in the form and set the ID to false / 0 so that the 
 server know's to call the POST endpoint & not PUT'''
-@app.route('/item/add', methods=['GET'])
-def add_item() :
-	check_login()
 
+@app.route('/item/add', methods=['GET'])
+@check_login
+def add_item() :
 	db_id = False
 
 	item_data = {
@@ -188,20 +285,11 @@ def add_item() :
 '''this method is where the above form is actually posted to. All of the info is 
 loaded & we check if the user is logged in and is posting from our site (nonce), 
 otherwise redirect them'''
+
 @app.route('/item/update/<int:id>', methods=['POST'])
+@check_login
+@check_state
 def post_item(id) :
-	check_login()
-
-	'''check if the nonce exists and that it matches this user'''
-	if 'state' not in login_session :
-		return redirect('/')
-	
-	if login_session['state'] != request.form['state'] :
-		return redirect('/')
-
-	if request.method != 'POST':
-		return redirect('/')
-
 	'''either load the image thumbnail if it's a new item, or 
 	load the current items image if we're updating'''
 	if id == 0 :
@@ -229,47 +317,42 @@ def post_item(id) :
 		'user_id' : login_session['user_id']
 	}
 
+	headers = {'content-type': 'application/json', 'access-token' : login_session['access_token']}
+
 	response = None
 
 
 	'''make the necessary posts to our JSON api. Either to update 
 	the current item if id > 0 or create a new item '''
 	if id == 0 :
-		response = requests.post(JSON_URL + '/json/item', data= item_data)
-		response = json.loads(response.text)
+		response = requests.post(JSON_URL + '/json/item', data= json.dumps(item_data, cls=models.CustomJSONEncoder), headers=headers)
 	else :
 		item_data['id'] = id
-		response = requests.put(JSON_URL + '/json/item/' + str(id), data= json.dumps(item_data, cls=models.CustomJSONEncoder))
-		response = json.loads(response.text)
+		response = requests.put(JSON_URL + '/json/item/' + str(id), data= json.dumps(item_data, cls=models.CustomJSONEncoder), headers=headers)
 		
 
 	'''redirect and show a message'''
 
-	if 'result' in response :
-		if response['result'] == True :
-			flash('That item was successfully created / updated')
-			return redirect('/')
-		else :
-			flash('There was a problem updating that item')
-			return redirect('/')
-	else :
-		flash('There was a problem updating that item')
+	if response.status_code == 200 :
+		flash('That item was successfully created / updated')
 		return redirect('/')
+	else :
+		abort(response.status_code)
 		
 '''the below function deletes an item by querying the JSON API'''
-@app.route('/item/<item>/delete/<state>', methods=['GET'])
-def delete_item(item, state) :
-	check_login()
-	if 'state' in login_session :
-		if login_session['state'] == state :
-			data = requests.delete(JSON_URL + '/json/item/' + item)
-			data = json.loads(data.text)
-			if data['result'] == True :
-				flash('Item successfully deleted')
-				return redirect('/')
+@app.route('/item/<item>/delete/', methods=['GET'])
+@check_login
+@check_state
+def delete_item(item) :
+	
+	headers = {'content-type': 'application/json', 'access-token' : login_session['access_token']}
+	data = requests.delete(JSON_URL + '/json/item/' + item, headers = headers)
+	if data.status_code == 200 :
+		flash('Item successfully deleted')
+		return redirect('/')
 
-	flash('Error deleting item')
-	return redirect('/item/' + item)
+	abort(data.status_code)
+
 
 '''show the login form'''
 @app.route('/login', methods=['GET'])
@@ -287,7 +370,6 @@ def login() :
 """CATEGORIES"""
 @app.route('/json/category/list')
 def JSON_list_categories() :
-
 	categories = session.query(models.Category).all()
 		
 	return json.dumps({'categories':categories}, cls=models.CustomJSONEncoder)
@@ -300,12 +382,6 @@ def JSON_get_category(id) :
 
 """ITEMS"""
 
-'''show an example of an XML endpoint'''
-@app.route('/json/item/<int:id>', methods = ['GET'])
-def JSON_get_item(id) :
-	root = ET.element('root')
-	items = session.query(models.Item).options(joinedload('category')).filter(models.Item.id == id).one()
-	return json.dumps({'items': items}, cls=models.CustomJSONEncoder)
 
 @app.route('/json/item/list')
 def JSON_list_items() :
@@ -325,27 +401,34 @@ def JSON_get_item(id) :
 	return json.dumps({'items': items}, cls=models.CustomJSONEncoder)
 
 @app.route('/json/item', methods = ['POST'])
+@check_access_token
 def JSON_create_item() :
-	check_login()
-	item = models.Item(name= request.form['name'], picture= request.form['picture'],
-		user_id= request.form['user_id'], category_id= request.form['category_id'],
-		description= request.form['description'], created = time.strftime("%d/%m/%Y"), udpated= time.strftime("%d/%m/%Y"))
+
+	item = models.Item(name= request.json['name'], picture= request.json['picture'],
+		user_id= request.json['user_id'], category_id= request.json['category_id'],
+		description= request.json['description'], created = time.strftime("%d/%m/%Y"), updated= time.strftime("%d/%m/%Y"))
 	session.add(item)
 	session.commit()
 
-	return json.dumps({'result' :  True})
+
+
+	return json_response(200, "")
 
 @app.route('/json/item/<int:id>', methods = ['PUT'])
+@check_access_token
 def JSON_update_item(id) :
-	check_login()
+	'''check the user owns the item'''
 	item = session.query(models.Item).filter(models.Item.id == id).one()
 
+	token = get_access_token_by_token(request.headers['access-token'])
 
-	request.data = json.loads(request.data)
-	item.picture = request.data['picture']
-	item.name = request.data['name']
-	item.description = request.data['description']
-	item.category_id = request.data['category_id']
+	if token.user_id != item.user_id :
+		return json_response(401, "Your are not authorised to perform that action")
+
+	item.picture = request.json['picture']
+	item.name = request.json['name']
+	item.description = request.json['description']
+	item.category_id = request.json['category_id']
 	item.updated = time.strftime("%d/%m/%Y")
 	
 	session.add(item)
@@ -354,9 +437,16 @@ def JSON_update_item(id) :
 	return json.dumps({'result' :  True})
 
 @app.route('/json/item/<int:id>', methods = ['DELETE'])
+@check_access_token
 def JSON_delete_item(id) :
 
-	
+	'''check the user owns the item'''
+	item = session.query(models.Item).filter(models.Item.id == id).one()
+	token = get_access_token_by_token(request.headers['access-token'])
+
+	if token.user_id != item.user_id :
+		return json_response(401, "Your are not authorised to perform that action")
+
 	session.query(models.Item).filter_by(id=id).delete()
 	session.commit()
 
@@ -423,6 +513,14 @@ def fbconnect():
 		user_id = createUser(login_session)
 	
 	login_session['user_id'] = user_id
+
+	'''check if there is an active access token to set to the user '''
+	token = get_access_token(user_id)
+
+	if token is None :
+		token = create_access_token(user_id)
+
+	login_session['access_token'] = token.token
 
 	flash('You are now logged in as ' + login_session['username'])
 	response = make_response(json.dumps(True), 200)
@@ -520,6 +618,14 @@ def gconnect():
 
 	login_session['user_id'] = user_id
 
+	'''check if there is an active access token to set to the user '''
+	token = get_access_token(user_id)
+
+	if token is None :
+		token = create_access_token(user_id)
+
+	login_session['access_token'] = token.token
+
 	flash('You are now logged in as ' + login_session['username'])
 	response = make_response(json.dumps(True), 200)
 	response.headers['Content-Type'] = 'application/json'
@@ -542,6 +648,7 @@ def disconnect():
         del login_session['picture']
         del login_session['user_id']
         del login_session['provider']
+        del login_session['access_token']
         flash("You have successfully been logged out.")
         return redirect('/')
     else:
@@ -583,24 +690,7 @@ def fbdisconnect():
 
 if __name__ == '__main__':
 	"""first seed the test data """
-	with open('data.json') as data_file:     
-		data = json.load(data_file)
-		categories = []
-		items = []
-		for categoryJSON in data["categories"] :
-			category = models.Category(name=categoryJSON["name"], user_id=categoryJSON["user_id"])
-			categories.append(category)
-
-		for itemJSON in data["items"] :
-			item = models.Item(name=itemJSON["name"], description=itemJSON["description"], 
-				category_id=itemJSON["category_id"], user_id=itemJSON["user_id"], 
-				picture=itemJSON["picture"], updated=itemJSON['updated'], created=itemJSON['created'])
-			items.append(item)
-
-		session.add_all(categories)
-		session.add_all(items);
-
-		session.commit()
+	seeder.populate()
 
 	app.debug = True
 	app.secret_key = 'super secret key'

@@ -25,3 +25,11 @@ CREATE TABLE items (
 	updated date,
 	created date
 );
+
+CREATE TABLE access_tokens (
+	ID SERIAL PRIMARY KEY,
+	token varchar(255),
+	created date,
+	expires date,
+	user_id SERIAL
+);

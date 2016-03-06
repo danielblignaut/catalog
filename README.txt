@@ -8,4 +8,7 @@ The application can be started by:
 3. running the application (python main.py)
 4. navigating to http://localhost:5000
 
+##Dependencies
+Please note that this project requires Flask v.0.9 and Werkzeug v0.8.3
+
 enjoy!
