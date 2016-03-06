@@ -692,6 +692,6 @@ if __name__ == '__main__':
 	"""first seed the test data """
 	seeder.populate()
 
-	app.debug = True
+	app.debug = False
 	app.secret_key = 'super secret key'
 	app.run(host='0.0.0.0', threaded = True)
